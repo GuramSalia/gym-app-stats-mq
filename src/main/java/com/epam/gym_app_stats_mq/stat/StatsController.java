@@ -1,8 +1,9 @@
 package com.epam.gym_app_stats_mq.stat;
 
-import com.epam.gym_app_stats_mq.api.*;
-import com.epam.gym_app_stats_mq.exception.InvalidTokenException;
-import com.epam.gym_app_stats_mq.proxy.TokenValidationProxy;
+import com.epam.gym_app_stats_mq.api.ActionTypeInStatApp;
+import com.epam.gym_app_stats_mq.api.FullStatRequestInStatApp;
+import com.epam.gym_app_stats_mq.api.MonthlyStatRequestInStatApp;
+import com.epam.gym_app_stats_mq.api.UpdateStatRequestInStatApp;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -22,14 +23,11 @@ import java.util.*;
 @RestController()
 public class StatsController {
 
-
     private final StatsService statsService;
-    private final TokenValidationProxy proxy;
 
     @Autowired
-    public StatsController(StatsService statsService, TokenValidationProxy proxy) {
+    public StatsController(StatsService statsService) {
         this.statsService = statsService;
-        this.proxy = proxy;
     }
 
     @GetMapping("/stats-api/v1/trainer-full-stats")
@@ -38,15 +36,12 @@ public class StatsController {
             @ApiResponse(responseCode = "200", description = "Trainer full stats retrieved successfully")
     })
     public ResponseEntity<Map<Integer, List<Map<String, Integer>>>> getTrainerFullStats(
-            @Valid @RequestBody FullStatRequest fullStatRequest,
-            @RequestHeader(name = "gym-app-correlation-id", required = false, defaultValue = "no-correlation-id") String correlationId
+            @Valid @RequestBody FullStatRequestInStatApp fullStatRequestInStatApp,
+            @RequestHeader(name = "gym_app_correlation_id", required = false, defaultValue = "no-correlation-id") String correlationId
     ) {
         log.info("\n\nstats ms -> stats update controller -> get full stat ->  correlationId: {}\n\n", correlationId);
 
-        String jwtToken = fullStatRequest.getToken();
-        validateJwtToken(jwtToken);
-
-        Integer trainerId = fullStatRequest.getTrainerId();
+        Integer trainerId = fullStatRequestInStatApp.getTrainerId();
         List<Stat> fullStatsOfTrainer = statsService.getStatByTrainerId(trainerId);
 
         Map<Integer, List<Map<String, Integer>>> responseMap = new HashMap<>();
@@ -64,17 +59,14 @@ public class StatsController {
             @ApiResponse(responseCode = "200", description = "Trainer stats for a given month retrieved successfully"),
     })
     public ResponseEntity<Map<String, Integer>> getTrainerMonthlyStats(
-            @Valid @RequestBody MonthlyStatRequest monthlyStatRequest,
-            @RequestHeader(name = "gym-app-correlation-id", required = false, defaultValue = "no-correlation-id") String correlationId
+            @Valid @RequestBody MonthlyStatRequestInStatApp monthlyStatRequestInStatApp,
+            @RequestHeader(name = "gym_app_correlation_id", required = false, defaultValue = "no-correlation-id") String correlationId
     ) {
         log.info("\n\nstats ms -> stats update controller->get monthly stat ->  correlationId: {}\n\n", correlationId);
 
-        String jwtToken = monthlyStatRequest.getToken();
-        validateJwtToken(jwtToken);
-
-        Integer trainerId = monthlyStatRequest.getTrainerId();
-        Integer year = monthlyStatRequest.getYear();
-        Integer month = monthlyStatRequest.getMonth();
+        Integer trainerId = monthlyStatRequestInStatApp.getTrainerId();
+        Integer year = monthlyStatRequestInStatApp.getYear();
+        Integer month = monthlyStatRequestInStatApp.getMonth();
         Map<String, Integer> response = getMonthlyStatResponse(trainerId, year, month);
         return ResponseEntity.ok(response);
     }
@@ -86,23 +78,19 @@ public class StatsController {
             @ApiResponse(responseCode = "201", description = "Trainer stats created successfully")
     })
     public ResponseEntity<Map<String, Integer>> updateTrainerStats(
-            @Valid @RequestBody UpdateStatRequest updateStatRequest,
-            @RequestHeader(name = "gym-app-correlation-id", required = false, defaultValue = "no-correlation-id") String correlationId
+            @Valid @RequestBody UpdateStatRequestInStatApp updateStatRequestInStatApp,
+            @RequestHeader(name = "gym_app_correlation_id", required = false, defaultValue = "no-correlation-id") String correlationId
     ) {
-
 
         log.info("\n\nstats ms -> stats update controller -> update stat ->  correlationId: {}\n\n", correlationId);
 
-        String jwtToken = updateStatRequest.getToken();
-        validateJwtToken(jwtToken);
+        Optional<Stat> statOptional = getStatOptional(updateStatRequestInStatApp);
 
-        Optional<Stat> statOptional = getStatOptional(updateStatRequest);
-
-        boolean actionTypeIsAdd = updateStatRequest.getActionType() == ActionType.ADD;
-        Integer minutes = updateStatRequest.getDuration();
-        Integer trainerId = updateStatRequest.getTrainerId();
-        Integer year = updateStatRequest.getYear();
-        Integer month = updateStatRequest.getMonth();
+        boolean actionTypeIsAdd = updateStatRequestInStatApp.getActionTypeInStatApp() == ActionTypeInStatApp.ADD;
+        Integer minutes = updateStatRequestInStatApp.getDuration();
+        Integer trainerId = updateStatRequestInStatApp.getTrainerId();
+        Integer year = updateStatRequestInStatApp.getYear();
+        Integer month = updateStatRequestInStatApp.getMonth();
         log.info("updating stats");
 
         if (statOptional.isPresent()) {
@@ -122,10 +110,9 @@ public class StatsController {
             return ResponseEntity.status(HttpStatus.OK).body(response);
         }
 
-        Stat stat = getStat(updateStatRequest);
+        Stat stat = getStat(updateStatRequestInStatApp);
         statsService.createStat(stat);
         Map<String, Integer> response = getMonthlyStatResponse(trainerId, year, month);
-
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -166,35 +153,22 @@ public class StatsController {
         return localDate.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
     }
 
-    private Optional<Stat> getStatOptional(UpdateStatRequest updateStatRequest) {
-        Integer trainerId = updateStatRequest.getTrainerId();
-        Integer year = updateStatRequest.getYear();
-        Integer month = updateStatRequest.getMonth();
+    private Optional<Stat> getStatOptional(UpdateStatRequestInStatApp updateStatRequestInStatApp) {
+        Integer trainerId = updateStatRequestInStatApp.getTrainerId();
+        Integer year = updateStatRequestInStatApp.getYear();
+        Integer month = updateStatRequestInStatApp.getMonth();
         return statsService.getByTrainerIdAndYearAndMonth(trainerId, year, month);
     }
 
-    private Stat getStat(UpdateStatRequest updateStatRequest) {
+    private Stat getStat(UpdateStatRequestInStatApp updateStatRequestInStatApp) {
         Stat stat = new Stat();
-        Integer trainerId = updateStatRequest.getTrainerId();
-        Integer year = updateStatRequest.getYear();
-        Integer month = updateStatRequest.getMonth();
+        Integer trainerId = updateStatRequestInStatApp.getTrainerId();
+        Integer year = updateStatRequestInStatApp.getYear();
+        Integer month = updateStatRequestInStatApp.getMonth();
         stat.setTrainerId(trainerId);
         stat.setYear(year);
         stat.setMonth(month);
-        stat.setMinutesMonthlyTotal(updateStatRequest.getDuration());
+        stat.setMinutesMonthlyTotal(updateStatRequestInStatApp.getDuration());
         return stat;
-    }
-
-    private void validateJwtToken(String jwtToken) {
-        log.info("\n\nstats ms -> stats update controller -> validate jwt token -> jwtToken: {}\n\n", jwtToken);
-        TokenValidationRequest tokenValidationRequest = new TokenValidationRequest();
-        tokenValidationRequest.setToken(jwtToken);
-        log.info("\n\n tokenValidationRequest: {}\n\n", tokenValidationRequest);
-        ResponseEntity<TokenValidationResponse> responseEntity = proxy.validateToken(tokenValidationRequest, "no-correlation-id");
-        log.info("\n\nstats ms -> stats update controller -> validate jwt token -> responseEntity: {}\n\n", responseEntity);
-        if (!responseEntity.getStatusCode().is2xxSuccessful()) {
-            throw new InvalidTokenException("could not validate the jwt token");
-        }
-
     }
 }
