@@ -15,6 +15,7 @@ import org.springframework.jms.annotation.JmsListener;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.TextStyle;
 import java.util.*;
@@ -25,21 +26,23 @@ public class RequestFullStatQueueListener {
 
     private final Senders mqSenders;
     private final StatsService statsService;
+    private final ObjectMapper objectMapper;
+
     @Value("${spring.jms.fullStatResponse}")
     private String fullStatResponseQueue;
 
     @Autowired
-    public RequestFullStatQueueListener(Senders mqSenders, StatsService statsService) {
+    public RequestFullStatQueueListener(Senders mqSenders, StatsService statsService, ObjectMapper objectMapper) {
         this.mqSenders = mqSenders;
         this.statsService = statsService;
+        this.objectMapper = objectMapper;
     }
 
     @JmsListener(destination = "${spring.jms.requestFullStat}")
     public void receivedFullStatRequest(
-            MapMessage message,
-//            FullStatRequestInStatApp fullStatRequestInStatApp,
-            @Header("gym_app_correlation_id") String correlationId) throws JMSException {
-        Map<String, String> map = JmsMessageConverter.convertMapMessageToMap(message);
+            String fullStatRequest,
+            @Header("gym_app_correlation_id") String correlationId) throws JMSException, IOException {
+        Map<String, String> map = jsonToMap(fullStatRequest);
         FullStatRequestInStatApp fullStatRequestInStatApp = FullStatRequestInStatApp.fromMap(map);
         log.info("\n\nSTAT APP -> Listener -> FULL STAT -> Received message with correlation ID {}: {}\n\n",
                  correlationId, fullStatRequestInStatApp);
@@ -89,5 +92,10 @@ public class RequestFullStatQueueListener {
             log.error("Error converting map to JSON: {}", e.getMessage());
             return "{}"; // Return an empty JSON object in case of error
         }
+    }
+
+    private Map<String, String> jsonToMap(String json) throws IOException {
+        // Using Jackson to convert JSON string to Map<String, String>
+        return objectMapper.readValue(json, objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
     }
 }

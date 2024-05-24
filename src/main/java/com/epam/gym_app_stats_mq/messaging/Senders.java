@@ -24,15 +24,15 @@ public class Senders {
         this.jmsTemplate = jmsTemplate;
     }
 
-    public void statUpdateResponse(Map<String, Integer> updateResponse, String correlationId) {
-        jmsTemplate.convertAndSend(statUpdateResponseQueue, updateResponse, message -> {
+    public void statUpdateResponse(String jsonUpdateResponse, String correlationId) {
+        jmsTemplate.convertAndSend(statUpdateResponseQueue, jsonUpdateResponse, message -> {
             message.setStringProperty("gym_app_correlation_id", correlationId);
             return message;
         });
     }
 
-    public void monthlyStatResponse(Map<String, Integer> monthlyStatResponse, String correlationId) {
-        jmsTemplate.convertAndSend(monthlyStatResponseQueue, monthlyStatResponse, message -> {
+    public void monthlyStatResponse(String jsonMonthlyStatResponse, String correlationId) {
+        jmsTemplate.convertAndSend(monthlyStatResponseQueue, jsonMonthlyStatResponse, message -> {
             message.setStringProperty("gym_app_correlation_id", correlationId);
             return message;
         });
