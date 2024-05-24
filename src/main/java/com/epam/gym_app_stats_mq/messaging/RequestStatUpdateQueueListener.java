@@ -2,6 +2,7 @@ package com.epam.gym_app_stats_mq.messaging;
 
 import com.epam.gym_app_stats_mq.api.ActionTypeInStatApp;
 import com.epam.gym_app_stats_mq.api.UpdateStatRequestInStatApp;
+import com.epam.gym_app_stats_mq.exception.dlqs.dlqTriggeringException;
 import com.epam.gym_app_stats_mq.stat.Stat;
 import com.epam.gym_app_stats_mq.stat.StatsService;
 import com.epam.gym_app_stats_mq.util.JmsMessageConverter;
@@ -43,46 +44,55 @@ public class RequestStatUpdateQueueListener {
     public void receivedStatUpdateRequest(
             String updateStatRequest,
             @Header("gym_app_correlation_id") String correlationId
-    ) throws JMSException, IOException {
-        Map<String, String> map = jsonToMap(updateStatRequest);
-        UpdateStatRequestInStatApp updateStatRequestInStatApp = UpdateStatRequestInStatApp.fromMap(map);
-        log.info("\n\nSTAT APP -> Listener -> STAT UPDATE -> Received message with correlation ID {}: {}\n\n",
-                 correlationId, updateStatRequestInStatApp);
+    ) {
+        UpdateStatRequestInStatApp updateStatRequestInStatApp;
+        try {
 
-        Optional<Stat> statOptional = getStatOptional(updateStatRequestInStatApp);
+            Map<String, String> map = jsonToMap(updateStatRequest);
+            updateStatRequestInStatApp = UpdateStatRequestInStatApp.fromMap(map);
+        } catch (Exception e) {
+            String errorMessage = String.format(
+                    "STAT-APP -> STAT UPDATE Listener -> Error processing message: %s",
+                    e.getMessage());
+            log.error(errorMessage);
+            throw new dlqTriggeringException(errorMessage);
+        }
+            log.info("\n\nSTAT APP -> Listener -> STAT UPDATE -> Received message with correlation ID {}: {}\n\n",
+                     correlationId, updateStatRequestInStatApp);
 
-        boolean actionTypeIsAdd = updateStatRequestInStatApp.getActionTypeInStatApp() == ActionTypeInStatApp.ADD;
-        Integer minutes = updateStatRequestInStatApp.getDuration();
-        Integer trainerId = updateStatRequestInStatApp.getTrainerId();
-        Integer year = updateStatRequestInStatApp.getYear();
-        Integer month = updateStatRequestInStatApp.getMonth();
-        log.info("updating stats");
+            Optional<Stat> statOptional = getStatOptional(updateStatRequestInStatApp);
 
-        Map<String, Integer> updateResponse;
+            boolean actionTypeIsAdd = updateStatRequestInStatApp.getActionTypeInStatApp() == ActionTypeInStatApp.ADD;
+            Integer minutes = updateStatRequestInStatApp.getDuration();
+            Integer trainerId = updateStatRequestInStatApp.getTrainerId();
+            Integer year = updateStatRequestInStatApp.getYear();
+            Integer month = updateStatRequestInStatApp.getMonth();
+            log.info("updating stats");
 
-        if (statOptional.isPresent()) {
-            Stat stat = statOptional.get();
-            Integer currentMinutes = stat.getMinutesMonthlyTotal();
-            int newMinutes;
-            if (actionTypeIsAdd) {
-                newMinutes = currentMinutes + minutes;
+            Map<String, Integer> updateResponse;
+
+            if (statOptional.isPresent()) {
+                Stat stat = statOptional.get();
+                Integer currentMinutes = stat.getMinutesMonthlyTotal();
+                int newMinutes;
+                if (actionTypeIsAdd) {
+                    newMinutes = currentMinutes + minutes;
+                } else {
+                    newMinutes = currentMinutes - minutes;
+                }
+
+                stat.setMinutesMonthlyTotal(newMinutes);
+                statsService.updateStat(stat);
+                updateResponse = getMonthlyStatResponse(trainerId, year, month);
             } else {
-                newMinutes = currentMinutes - minutes;
+                Stat stat = getStat(updateStatRequestInStatApp);
+                statsService.createStat(stat);
+                updateResponse = getMonthlyStatResponse(trainerId, year, month);
             }
 
-            stat.setMinutesMonthlyTotal(newMinutes);
-            statsService.updateStat(stat);
-            updateResponse = getMonthlyStatResponse(trainerId, year, month);
+            mqSenders.statUpdateResponse(convertMapToJson(updateResponse), correlationId);
 
-        } else {
-            Stat stat = getStat(updateStatRequestInStatApp);
-            statsService.createStat(stat);
-            updateResponse = getMonthlyStatResponse(trainerId, year, month);
-        }
-
-        mqSenders.statUpdateResponse(convertMapToJson(updateResponse), correlationId);
-
-        log.info("Sent message with correlation ID {}: {}", correlationId, updateResponse);
+            log.info("Sent message with correlation ID {}: {}", correlationId, updateResponse);
 
     }
 
