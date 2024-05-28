@@ -4,6 +4,8 @@ import com.epam.gym_app_stats_mq.api.MonthlyStatRequestInStatApp;
 import com.epam.gym_app_stats_mq.stat.Stat;
 import com.epam.gym_app_stats_mq.stat.StatsService;
 import com.epam.gym_app_stats_mq.util.JmsMessageConverter;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.jms.JMSException;
 import jakarta.jms.MapMessage;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +14,7 @@ import org.springframework.jms.annotation.JmsListener;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -21,21 +24,24 @@ import java.util.Optional;
 public class RequestMonthlyStatQueueListener {
     private final Senders mqSenders;
     private final StatsService statsService;
+    private final ObjectMapper objectMapper;
 
     @Value("${spring.jms.monthlyStatResponse}")
     private String monthlyStatResponseQueue;
 
-    public RequestMonthlyStatQueueListener(Senders mqSenders, StatsService statsService) {
+    public RequestMonthlyStatQueueListener(Senders mqSenders, StatsService statsService, ObjectMapper objectMapper) {
         this.mqSenders = mqSenders;
         this.statsService = statsService;
 
+        this.objectMapper = objectMapper;
     }
 
     @JmsListener(destination = "${spring.jms.requestMonthlyStat}")
     public void receivedMonthlyStatRequest(
-            MapMessage message,
-            @Header("gym_app_correlation_id") String correlationId) throws JMSException {
-        Map<String, String> map = JmsMessageConverter.convertMapMessageToMap(message);
+            String  monthlyStatRequest,
+            @Header("gym_app_correlation_id") String correlationId) throws JMSException, IOException {
+
+        Map<String, String> map = jsonToMap(monthlyStatRequest);
         MonthlyStatRequestInStatApp monthlyStatRequestInStatApp = MonthlyStatRequestInStatApp.fromMap(map);
         log.info("\n\nSTAT APP -> Listener -> MONTHLY STAT -> Received message with correlation ID {}: {}\n\n",
                  correlationId,
@@ -46,7 +52,7 @@ public class RequestMonthlyStatQueueListener {
         Integer month = monthlyStatRequestInStatApp.getMonth();
         Map<String, Integer> monthlyStatResponse = getMonthlyStatResponse(trainerId, year, month);
 
-        mqSenders.monthlyStatResponse(monthlyStatResponse, correlationId);
+        mqSenders.monthlyStatResponse(convertMapToJson(monthlyStatResponse), correlationId);
 
         log.info("Sent message with correlation ID {}: {}", correlationId, monthlyStatResponse);
     }
@@ -57,5 +63,20 @@ public class RequestMonthlyStatQueueListener {
         Map<String, Integer> response = new HashMap<>();
         response.put("minutes", result);
         return response;
+    }
+
+    private String convertMapToJson(Map<String, Integer> map) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        try {
+            return objectMapper.writeValueAsString(map);
+        } catch (JsonProcessingException e) {
+            log.error("Error converting map to JSON: {}", e.getMessage());
+            return "{}";
+        }
+    }
+
+    private Map<String, String> jsonToMap(String json) throws IOException {
+        // Using Jackson to convert JSON string to Map<String, String>
+        return objectMapper.readValue(json, objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
     }
 }
