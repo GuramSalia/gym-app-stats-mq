@@ -1,6 +1,7 @@
 package com.epam.gym_app_stats_mq.messaging;
 
 import com.epam.gym_app_stats_mq.api.FullStatRequestInStatApp;
+import com.epam.gym_app_stats_mq.exception.dlqs.dlqTriggeringException;
 import com.epam.gym_app_stats_mq.stat.Stat;
 import com.epam.gym_app_stats_mq.stat.StatsService;
 import com.epam.gym_app_stats_mq.util.JmsMessageConverter;
@@ -41,9 +42,22 @@ public class RequestFullStatQueueListener {
     @JmsListener(destination = "${spring.jms.requestFullStat}")
     public void receivedFullStatRequest(
             String fullStatRequest,
-            @Header("gym_app_correlation_id") String correlationId) throws JMSException, IOException {
-        Map<String, String> map = jsonToMap(fullStatRequest);
-        FullStatRequestInStatApp fullStatRequestInStatApp = FullStatRequestInStatApp.fromMap(map);
+            @Header("gym_app_correlation_id") String correlationId
+    ) {
+
+        FullStatRequestInStatApp fullStatRequestInStatApp;
+
+        try {
+            Map<String, String> map = jsonToMap(fullStatRequest);
+            fullStatRequestInStatApp = FullStatRequestInStatApp.fromMap(map);
+        } catch (Exception e) {
+            String errorMessage = String.format(
+                    "STAT-APP -> STAT UPDATE Listener -> Error processing message: %s",
+                    e.getMessage());
+            log.error(errorMessage);
+            throw new dlqTriggeringException(errorMessage);
+        }
+
         log.info("\n\nSTAT APP -> Listener -> FULL STAT -> Received message with correlation ID {}: {}\n\n",
                  correlationId, fullStatRequestInStatApp);
 
@@ -96,6 +110,7 @@ public class RequestFullStatQueueListener {
 
     private Map<String, String> jsonToMap(String json) throws IOException {
         // Using Jackson to convert JSON string to Map<String, String>
-        return objectMapper.readValue(json, objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
+        return objectMapper.readValue(json, objectMapper.getTypeFactory()
+                                                        .constructMapType(Map.class, String.class, String.class));
     }
 }

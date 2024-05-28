@@ -1,6 +1,7 @@
 package com.epam.gym_app_stats_mq.messaging;
 
 import com.epam.gym_app_stats_mq.api.MonthlyStatRequestInStatApp;
+import com.epam.gym_app_stats_mq.exception.dlqs.dlqTriggeringException;
 import com.epam.gym_app_stats_mq.stat.Stat;
 import com.epam.gym_app_stats_mq.stat.StatsService;
 import com.epam.gym_app_stats_mq.util.JmsMessageConverter;
@@ -38,14 +39,25 @@ public class RequestMonthlyStatQueueListener {
 
     @JmsListener(destination = "${spring.jms.requestMonthlyStat}")
     public void receivedMonthlyStatRequest(
-            String  monthlyStatRequest,
-            @Header("gym_app_correlation_id") String correlationId) throws JMSException, IOException {
+            String monthlyStatRequest,
+            @Header("gym_app_correlation_id") String correlationId
+    ) throws JMSException, IOException {
 
-        Map<String, String> map = jsonToMap(monthlyStatRequest);
-        MonthlyStatRequestInStatApp monthlyStatRequestInStatApp = MonthlyStatRequestInStatApp.fromMap(map);
-        log.info("\n\nSTAT APP -> Listener -> MONTHLY STAT -> Received message with correlation ID {}: {}\n\n",
-                 correlationId,
-                 monthlyStatRequestInStatApp);
+        MonthlyStatRequestInStatApp monthlyStatRequestInStatApp;
+
+        try {
+            Map<String, String> map = jsonToMap(monthlyStatRequest);
+            monthlyStatRequestInStatApp = MonthlyStatRequestInStatApp.fromMap(map);
+            log.info("\n\nSTAT APP -> Listener -> MONTHLY STAT -> Received message with correlation ID {}: {}\n\n",
+                     correlationId,
+                     monthlyStatRequestInStatApp);
+        } catch (Exception e) {
+            String errorMessage = String.format(
+                    "STAT-APP -> STAT UPDATE Listener -> Error processing message: %s",
+                    e.getMessage());
+            log.error(errorMessage);
+            throw new dlqTriggeringException(errorMessage);
+        }
 
         Integer trainerId = monthlyStatRequestInStatApp.getTrainerId();
         Integer year = monthlyStatRequestInStatApp.getYear();
@@ -77,6 +89,7 @@ public class RequestMonthlyStatQueueListener {
 
     private Map<String, String> jsonToMap(String json) throws IOException {
         // Using Jackson to convert JSON string to Map<String, String>
-        return objectMapper.readValue(json, objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
+        return objectMapper.readValue(json, objectMapper.getTypeFactory()
+                                                        .constructMapType(Map.class, String.class, String.class));
     }
 }
