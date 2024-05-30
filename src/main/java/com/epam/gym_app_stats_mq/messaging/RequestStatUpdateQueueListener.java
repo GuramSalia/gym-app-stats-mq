@@ -75,29 +75,12 @@ public class RequestStatUpdateQueueListener {
         Integer month = updateStatRequestInStatApp.getMonth();
         log.info("updating stats");
 
-        // logic of calling mongoDB should start here.
-
-        /*
-        I need first to get missing fields I will need for mongoDB: username, firstName, lastName, status
-        I already have minutes, actionType, year, month.
-        */
-
         String username = updateStatRequestInStatApp.getUserName();
         String firstName = updateStatRequestInStatApp.getFirstName();
         String lastName = updateStatRequestInStatApp.getLastName();
         Boolean status = updateStatRequestInStatApp.getStatus();
 
-        /*
-        though I have a similar relational db and there is whole code below related to it, I can completely ignore it
-        and put all mongo related code here.
-        I can also actually extract it as a method and simply provide necessary fields.
-        I will need following fields: userName, lastName, firstName, status, year, month, minutes, actionTypeIsAdd
-        I can call this method letsMongo() :).
-         */
-
         serviceMongoDb.letsMongo(username, lastName, firstName, status, year, month, minutes, actionTypeIsAdd);
-
-        // logic of calling mongoDB should end here.
 
         Map<String, Integer> updateResponse;
 

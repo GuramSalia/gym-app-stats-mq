@@ -25,10 +25,8 @@ public class StatServiceMongoDb {
             boolean actionTypeIsAdd
     ) {
         log.info("\n\n** MONGO ** >  LETSMONGO >> update username: {}\n\n", username);
-        log.info("\n\n ------ ** MONGO ** > letsMongo > repoMongoDb.findByUserName(username) \n\n");
         StatModelMongoDb trainer = repoMongoDb.findByUserName(username);
         log.info("\n\n ** MONGO ** > trainer (StatModelMongoDb): {}\n\n", trainer);
-        log.info("\n\n ++++++ ** MONGO ** > letsMongo > repoMongoDb.findByUserName(username) \n\n");
 
         if (trainer == null) {
             log.info("\n\n** MONGO ** >SERV> no such username, create new document \n\n");
@@ -40,8 +38,7 @@ public class StatServiceMongoDb {
 
             List<YearSummaryMongoDb> yearSummaryList = getYearSummaryListMongoDbs(year, month, minutes);
             trainer.setTrainingSummary(yearSummaryList);
-            log.info("\n\n ------ ** MONGO ** > letsMongo> year found: repoMongoDb.save(trainer)\n\n");
-            log.info("\n\n** MONGO ** > trainer (StatModelMongoDb): {}\n\n", trainer);
+            log.info("\n\n** MONGO ** > no trainer found, created trainer(StatModelMongoDb): {}\n\n", trainer);
             repoMongoDb.save(trainer);
             log.info("\n\n +++++ ** MONGO ** > letsMongo> year found: repoMongoDb.save(trainer)\n\n");
         } else {

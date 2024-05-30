@@ -7,8 +7,4 @@ import java.util.List;
 
 public interface StatRepoMongoDb extends MongoRepository<StatModelMongoDb, ObjectId> {
     StatModelMongoDb findByUserName(String userName);
-//    List<MonthlySummaryMongoDb> findByUserNameAndTrainingSummaryYear(String userName, String year);
-//
-//    MonthlySummaryMongoDb findByUserNameAndTrainingSummaryYearAndTrainingSummaryMonthsMonth(String userName, String year, String month);
-
 }

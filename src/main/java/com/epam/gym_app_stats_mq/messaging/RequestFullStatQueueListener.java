@@ -104,13 +104,13 @@ public class RequestFullStatQueueListener {
             return objectMapper.writeValueAsString(map);
         } catch (JsonProcessingException e) {
             log.error("Error converting map to JSON: {}", e.getMessage());
-            return "{}"; // Return an empty JSON object in case of error
+            return "{}";
         }
     }
 
     private Map<String, String> jsonToMap(String json) throws IOException {
-        // Using Jackson to convert JSON string to Map<String, String>
-        return objectMapper.readValue(json, objectMapper.getTypeFactory()
-                                                        .constructMapType(Map.class, String.class, String.class));
+        return objectMapper.readValue(
+                json,
+                objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
     }
 }
