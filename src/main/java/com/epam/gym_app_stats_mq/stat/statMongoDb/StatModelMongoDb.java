@@ -4,8 +4,9 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.bson.types.ObjectId;
-import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 
 import java.io.Serializable;
 import java.util.List;
@@ -14,11 +15,12 @@ import java.util.List;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@CompoundIndexes({
+        @CompoundIndex(name = "lastName_firstName_idx", def = "{'lastName' : 1, 'firstName' : 1}")
+})
 public class StatModelMongoDb implements Serializable {
     private ObjectId id;
-    @Indexed(unique = true)
     private String userName;
-    @Indexed(unique = true)
     private String firstName;
     private String lastName;
     private boolean status;
