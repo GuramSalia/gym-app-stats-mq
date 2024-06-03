@@ -5,11 +5,10 @@ import com.epam.gym_app_stats_mq.api.UpdateStatRequestInStatApp;
 import com.epam.gym_app_stats_mq.exception.dlqs.dlqTriggeringException;
 import com.epam.gym_app_stats_mq.stat.Stat;
 import com.epam.gym_app_stats_mq.stat.StatsService;
-import com.epam.gym_app_stats_mq.util.JmsMessageConverter;
+import com.epam.gym_app_stats_mq.stat.statMongoDb.StatRepoMongoDb;
+import com.epam.gym_app_stats_mq.stat.statMongoDb.StatServiceMongoDb;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.jms.JMSException;
-import jakarta.jms.MapMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,7 +18,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -29,15 +27,22 @@ public class RequestStatUpdateQueueListener {
     private final Senders mqSenders;
     private final StatsService statsService;
     private final ObjectMapper objectMapper;
+    private final StatServiceMongoDb serviceMongoDb;
 
     @Value("${spring.jms.statUpdateResponse}")
     private String statUpdateResponseQueue;
 
     @Autowired
-    public RequestStatUpdateQueueListener(Senders mqSenders, StatsService statsService, ObjectMapper objectMapper) {
+    public RequestStatUpdateQueueListener(
+            Senders mqSenders,
+            StatsService statsService,
+            ObjectMapper objectMapper,
+            StatServiceMongoDb serviceMongoDb
+    ) {
         this.mqSenders = mqSenders;
         this.statsService = statsService;
         this.objectMapper = objectMapper;
+        this.serviceMongoDb = serviceMongoDb;
     }
 
     @JmsListener(destination = "${spring.jms.requestStatUpdate}")
@@ -46,6 +51,7 @@ public class RequestStatUpdateQueueListener {
             @Header("gym_app_correlation_id") String correlationId
     ) {
         UpdateStatRequestInStatApp updateStatRequestInStatApp;
+        log.info("\n\nSTAT-APP >> UPDATE LISTENER >> received Request: {}\n\n", updateStatRequest);
         try {
 
             Map<String, String> map = jsonToMap(updateStatRequest);
@@ -57,43 +63,49 @@ public class RequestStatUpdateQueueListener {
             log.error(errorMessage);
             throw new dlqTriggeringException(errorMessage);
         }
-            log.info("\n\nSTAT APP -> Listener -> STAT UPDATE -> Received message with correlation ID {}: {}\n\n",
-                     correlationId, updateStatRequestInStatApp);
+        log.info("\n\nSTAT APP -> Listener -> STAT UPDATE -> Received message with correlation ID {}: {}\n\n",
+                 correlationId, updateStatRequestInStatApp);
 
-            Optional<Stat> statOptional = getStatOptional(updateStatRequestInStatApp);
+        Optional<Stat> statOptional = getStatOptional(updateStatRequestInStatApp);
 
-            boolean actionTypeIsAdd = updateStatRequestInStatApp.getActionTypeInStatApp() == ActionTypeInStatApp.ADD;
-            Integer minutes = updateStatRequestInStatApp.getDuration();
-            Integer trainerId = updateStatRequestInStatApp.getTrainerId();
-            Integer year = updateStatRequestInStatApp.getYear();
-            Integer month = updateStatRequestInStatApp.getMonth();
-            log.info("updating stats");
+        boolean actionTypeIsAdd = updateStatRequestInStatApp.getActionTypeInStatApp() == ActionTypeInStatApp.ADD;
+        Integer minutes = updateStatRequestInStatApp.getDuration();
+        Integer trainerId = updateStatRequestInStatApp.getTrainerId();
+        Integer year = updateStatRequestInStatApp.getYear();
+        Integer month = updateStatRequestInStatApp.getMonth();
+        log.info("updating stats");
 
-            Map<String, Integer> updateResponse;
+        String username = updateStatRequestInStatApp.getUserName();
+        String firstName = updateStatRequestInStatApp.getFirstName();
+        String lastName = updateStatRequestInStatApp.getLastName();
+        Boolean status = updateStatRequestInStatApp.getStatus();
 
-            if (statOptional.isPresent()) {
-                Stat stat = statOptional.get();
-                Integer currentMinutes = stat.getMinutesMonthlyTotal();
-                int newMinutes;
-                if (actionTypeIsAdd) {
-                    newMinutes = currentMinutes + minutes;
-                } else {
-                    newMinutes = currentMinutes - minutes;
-                }
+        serviceMongoDb.letsMongo(username, lastName, firstName, status, year, month, minutes, actionTypeIsAdd);
 
-                stat.setMinutesMonthlyTotal(newMinutes);
-                statsService.updateStat(stat);
-                updateResponse = getMonthlyStatResponse(trainerId, year, month);
+        Map<String, Integer> updateResponse;
+
+        if (statOptional.isPresent()) {
+            Stat stat = statOptional.get();
+            Integer currentMinutes = stat.getMinutesMonthlyTotal();
+            int newMinutes;
+            if (actionTypeIsAdd) {
+                newMinutes = currentMinutes + minutes;
             } else {
-                Stat stat = getStat(updateStatRequestInStatApp);
-                statsService.createStat(stat);
-                updateResponse = getMonthlyStatResponse(trainerId, year, month);
+                newMinutes = currentMinutes - minutes;
             }
 
-            mqSenders.statUpdateResponse(convertMapToJson(updateResponse), correlationId);
+            stat.setMinutesMonthlyTotal(newMinutes);
+            statsService.updateStat(stat);
+            updateResponse = getMonthlyStatResponse(trainerId, year, month);
+        } else {
+            Stat stat = getStat(updateStatRequestInStatApp);
+            statsService.createStat(stat);
+            updateResponse = getMonthlyStatResponse(trainerId, year, month);
+        }
 
-            log.info("Sent message with correlation ID {}: {}", correlationId, updateResponse);
+        mqSenders.statUpdateResponse(convertMapToJson(updateResponse), correlationId);
 
+        log.info("Sent message with correlation ID {}: {}", correlationId, updateResponse);
     }
 
     private Optional<Stat> getStatOptional(UpdateStatRequestInStatApp updateStatRequestInStatApp) {
@@ -129,12 +141,12 @@ public class RequestStatUpdateQueueListener {
             return objectMapper.writeValueAsString(map);
         } catch (JsonProcessingException e) {
             log.error("Error converting map to JSON: {}", e.getMessage());
-            return "{}"; // Return an empty JSON object in case of error
+            return "{}";
         }
     }
 
     private Map<String, String> jsonToMap(String json) throws IOException {
-        // Using Jackson to convert JSON string to Map<String, String>
-        return objectMapper.readValue(json, objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
+        return objectMapper.readValue(json, objectMapper.getTypeFactory()
+                                                        .constructMapType(Map.class, String.class, String.class));
     }
 }

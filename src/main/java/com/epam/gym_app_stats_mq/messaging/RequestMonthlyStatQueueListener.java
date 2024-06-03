@@ -88,8 +88,8 @@ public class RequestMonthlyStatQueueListener {
     }
 
     private Map<String, String> jsonToMap(String json) throws IOException {
-        // Using Jackson to convert JSON string to Map<String, String>
-        return objectMapper.readValue(json, objectMapper.getTypeFactory()
-                                                        .constructMapType(Map.class, String.class, String.class));
+        return objectMapper.readValue(
+                json,
+                objectMapper.getTypeFactory().constructMapType(Map.class, String.class, String.class));
     }
 }

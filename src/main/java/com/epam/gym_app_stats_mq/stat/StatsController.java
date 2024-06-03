@@ -117,15 +117,6 @@ public class StatsController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    private void logRequestHeaders(HttpServletRequest request) {
-        Enumeration<String> headerNames = request.getHeaderNames();
-        while (headerNames.hasMoreElements()) {
-            String headerName = headerNames.nextElement();
-            String headerValue = request.getHeader(headerName);
-            log.info("Request Header: {} = {}", headerName, headerValue);
-        }
-    }
-
     private Map<String, Integer> getMonthlyStatResponse(Integer trainerId, Integer year, Integer month) {
         Optional<Stat> statOptional = statsService.getByTrainerIdAndYearAndMonth(trainerId, year, month);
         int result = statOptional.map(Stat::getMinutesMonthlyTotal).orElse(0);
