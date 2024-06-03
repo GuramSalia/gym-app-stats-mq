@@ -13,6 +13,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -33,10 +36,11 @@ public class ComponentSteps {
         this.objectMapper = objectMapper;
     }
 
-    @Given("a stat-update-request payload {string}")
+    @Given("a stat-update-request payload from file {string}")
     public void aStatUpdateRequestPayloadTrainerIdYearMonthDurationActionTypeADDUserNameTimSmithFirstNameTimLastNameSmithStatusTrue(
-            String statUpdateRequestPayload
-    ) throws JsonProcessingException {
+            String filePath
+    ) throws IOException {
+        String statUpdateRequestPayload = new String(Files.readAllBytes(Paths.get(filePath)));
 
         Map<String, String> map = objectMapper.readValue(
                 statUpdateRequestPayload,
