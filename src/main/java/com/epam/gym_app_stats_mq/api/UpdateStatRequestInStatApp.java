@@ -18,6 +18,14 @@ public class UpdateStatRequestInStatApp implements Serializable {
     private Integer duration;
     @NotNull
     private ActionTypeInStatApp actionTypeInStatApp;
+    @NotNull
+    private String userName;
+    @NotNull
+    private String firstName;
+    @NotNull
+    private String lastName;
+    @NotNull
+    private Boolean status;
 
     public static UpdateStatRequestInStatApp fromMap(Map<String, String> map) {
         UpdateStatRequestInStatApp request = new UpdateStatRequestInStatApp();
@@ -26,6 +34,10 @@ public class UpdateStatRequestInStatApp implements Serializable {
         request.setMonth(Integer.parseInt(map.get("month")));
         request.setDuration(Integer.parseInt(map.get("duration")));
         request.setActionTypeInStatApp(ActionTypeInStatApp.valueOf(map.get("actionType")));
+        request.setUserName(map.get("userName"));
+        request.setFirstName(map.get("firstName"));
+        request.setLastName(map.get("lastName"));
+        request.setStatus(Boolean.parseBoolean(map.get("status")));
         return request;
     }
 }
